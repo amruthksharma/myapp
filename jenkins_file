@@ -1,1 +1,52 @@
-
+pipeline {
+    agent any 
+    stages {
+        stage('Build') { 
+            steps {
+                 git branch: "master", credentialsId: 'c058c599-5003-456e-8acb-eeddbfdfb50a', url: 'https://github.com/pachuarivelu/jobzterz-core.git'
+                 sh 'cp ./src/main/resources/application.properties.prod ./src/main/resources/application.properties'
+                 sh 'mvn install'  
+                
+            }
+            }
+        stage ('Command exec on Remote server!') {
+            steps{
+                script{
+                    stage ('ssh') {
+                        sshagent(['c9a26ce2-716a-4fc5-9a36-6a60a9f069d1']) {
+                           // sh "ssh -o StrictHostKeyChecking=no ubuntu@3.82.175.99 sudo systemctl start tomcat"
+                            //  sh "ssh -o StrictHostKeyChecking=no ubuntu@3.82.175.99 sudo chmod  -R  777  /opt"
+                             //sh "ssh -o StrictHostKeyChecking=no ubuntu@3.82.175.99 sudo chown -R ubuntu:ubuntu /opt"
+                            // sh "ssh -o StrictHostKeyChecking=no ubuntu@3.82.175.99 sudo cp /opt/tomcat/latest/webapps/1ajob_secure.war /opt/tomcat/backup/1ajob_secure.war"
+                                //sh "ssh -o StrictHostKeyChecking=no ubuntu@3.88.66.175 sudo mkdir /opt/backup"
+                                //sh "ssh -o StrictHostKeyChecking=no ubuntu@3.88.66.175 sudo chmod  -R  777  /opt"
+                                   sh "ssh ubuntu@3.88.66.175 sudo mysqldump --single-transaction -ujobdbuserprod -pmysql@123prod -P9491 --all-databases '>' /opt/backup/dbbackup.sql"
+                                 // sh "ssh -o StrictHostKeyChecking=no ubuntu@18.205.115.156 sudo mkdir /opt/backup"
+                        //         sh "ssh -o StrictHostKeyChecking=no ubuntu@18.205.115.156 sudo chmod  -R  777  /opt"
+                      //           sh "ssh -o StrictHostKeyChecking=no ubuntu@18.205.115.156 sudo mongodump --host 18.205.115.156 --port 27017  --out=/opt/backup/jobzterzgeo_secure"
+                    }
+                }
+            }
+        }
+    }
+        stage('SSH transfer') { 
+          steps {
+                sshPublisher(continueOnError: false, failOnError: true, 
+                   publishers: [sshPublisherDesc(configName: "prodtomcat", verbose: true,
+                        transfers: [sshTransfer(sourceFiles: "target/1ajob_secure.war", removePrefix: "target", remoteDirectory: "/opt/tomcat/latest/webapps", execCommand: "")])])
+            }
+        }
+        stage ('stop tomcat') {
+            steps{
+                script{
+                    stage ('ssh') {
+                        sshagent(['c9a26ce2-716a-4fc5-9a36-6a60a9f069d1']) {
+                            sh "ssh -o StrictHostKeyChecking=no ubuntu@3.82.175.99 sudo systemctl start tomcat"
+                        }
+                    }
+                }
+            }
+        }
+        
+    }
+}
