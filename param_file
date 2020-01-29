@@ -1,0 +1,67 @@
+properties([parameters([string(defaultValue: '', description: 'Please key-in the IP address of Mongo DB', name: 'mongo_ip', trim: false), string(defaultValue: '', description: 'Please key-in the IP address of MySQL DB', name: 'mysql_ip', trim: false), string(defaultValue: '', description: 'Please key-in the IP address of Rabbit MQ', name: 'rabbit_mq_ip', trim: false), string(defaultValue: '', description: 'Please key-in the port number for Rabbit MQ', name: 'r_port', trim: false)])])
+
+node {
+    stage('Parameterised build'){
+        echo "Taking IP addresses as input from the user at runtime.."
+        echo "${params.mongo_ip}"
+        echo "${params.mysql_ip}"
+        echo "${params.rabbit_mq_ip}"
+        echo "${params.r_port}"
+        contentReplace( configs: [ fileContentReplaceConfig( configs: [ fileContentReplaceItemConfig( search: '@@MONGO_DB_IP@@', replace: "${params.mongo_ip}", matchCount: 1) ], fileEncoding: 'UTF-8', filePath: '/var/lib/jenkins/workspace/param_1ajob_prod/src/main/resources/application.properties.prod') ])
+        contentReplace( configs: [ fileContentReplaceConfig( configs: [ fileContentReplaceItemConfig( search: '@@MYSQL_DB_IP@@', replace: "${params.mysql_ip}", matchCount: 2) ], fileEncoding: 'UTF-8', filePath: '/var/lib/jenkins/workspace/param_1ajob_prod/src/main/resources/application.properties.prod') ])
+        contentReplace( configs: [ fileContentReplaceConfig( configs: [ fileContentReplaceItemConfig( search: '@@RABBIT_MQ_IP@@', replace: "${params.rabbit_mq_ip}", matchCount: 1) ], fileEncoding: 'UTF-8', filePath: '/var/lib/jenkins/workspace/param_1ajob_prod/src/main/resources/application.properties.prod') ])
+        contentReplace( configs: [ fileContentReplaceConfig( configs: [ fileContentReplaceItemConfig( search: '@@R_PORT@@', replace: "${params.r_port}", matchCount: 1) ], fileEncoding: 'UTF-8', filePath: '/var/lib/jenkins/workspace/param_1ajob_prod/src/main/resources/application.properties.prod') ])
+    }
+}
+pipeline {
+    agent any 
+    stages {
+        stage('Build') { 
+            steps {
+                 git branch: "master", credentialsId: 'c058c599-5003-456e-8acb-eeddbfdfb50a', url: 'https://github.com/pachuarivelu/jobzterz-core.git'
+                 sh 'cp ./src/main/resources/application.properties.prod ./src/main/resources/application.properties'
+                 sh 'mvn install'  
+                
+            }
+            }
+        stage ('Command exec on Remote server!') {
+            steps{
+                script{
+                    stage ('ssh') {
+                        sshagent(['c9a26ce2-716a-4fc5-9a36-6a60a9f069d1']) {
+                           // sh "ssh -o StrictHostKeyChecking=no ubuntu@3.82.175.99 sudo systemctl start tomcat"
+                            //  sh "ssh -o StrictHostKeyChecking=no ubuntu@3.82.175.99 sudo chmod  -R  777  /opt"
+                             //sh "ssh -o StrictHostKeyChecking=no ubuntu@3.82.175.99 sudo chown -R ubuntu:ubuntu /opt"
+                            // sh "ssh -o StrictHostKeyChecking=no ubuntu@3.82.175.99 sudo cp /opt/tomcat/latest/webapps/1ajob_secure.war /opt/tomcat/backup/1ajob_secure.war"
+                                //sh "ssh -o StrictHostKeyChecking=no ubuntu@3.88.66.175 sudo mkdir /opt/backup"
+                                //sh "ssh -o StrictHostKeyChecking=no ubuntu@3.88.66.175 sudo chmod  -R  777  /opt"
+                                  //sh "ssh ubuntu@3.88.66.175 sudo mysqldump --single-transaction -ujobdbuserprod -pmysql@123prod -P9491 --all-databases '>' /opt/backup/dbbackup.sql"
+                                 // sh "ssh -o StrictHostKeyChecking=no ubuntu@18.205.115.156 sudo mkdir /opt/backup"
+                    //           sh "ssh -o StrictHostKeyChecking=no ubuntu@18.205.115.156 sudo chmod  -R  777  /opt"
+                        //         sh "ssh -o StrictHostKeyChecking=no ubuntu@18.205.115.156 sudo mongodump --host 18.205.115.156 --port 27017  --out=/opt/backup/jobzterzgeo_secure"
+                    }
+                }
+            }
+        }
+    }
+        stage('SSH transfer') { 
+          steps {
+                sshPublisher(continueOnError: false, failOnError: true, 
+                   publishers: [sshPublisherDesc(configName: "prodtomcat", verbose: true,
+                        transfers: [sshTransfer(sourceFiles: "target/1ajob_secure.war", removePrefix: "target", remoteDirectory: "/opt/tomcat/latest/webapps", execCommand: "")])])
+            }
+        }
+        stage ('stop tomcat') {
+            steps{
+                script{
+                    stage ('ssh') {
+                        sshagent(['c9a26ce2-716a-4fc5-9a36-6a60a9f069d1']) {
+                            sh "ssh -o StrictHostKeyChecking=no ubuntu@18.212.181.89 sudo systemctl start tomcat"
+                        }
+                    }
+                }
+            }
+        }
+        
+    }
+}
